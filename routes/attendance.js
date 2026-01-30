@@ -451,7 +451,7 @@ router.post('/recognize', verifyToken, async (req, res) => {
       department: s.department,
       section: s.section,
       year: s.year,
-      face_encoding: JSON.parse(s.face_encoding)
+      face_encoding: s.face_encoding
     }));
 
     console.log(`Registered students found: ${registeredStudents.length}`);
@@ -520,7 +520,7 @@ router.post('/recognize-multiple', verifyToken, async (req, res) => {
       department: s.department,
       section: s.section,
       year: s.year,
-      face_encoding: JSON.parse(s.face_encoding)
+      face_encoding: s.face_encoding
     }));
 
     // 2️⃣ Send ALL images to ML service
@@ -601,12 +601,13 @@ router.post('/mark', verifyToken, async (req, res) => {
     // 1. Prevent duplicate attendance
     const duplicateCheck = await db.query(
       `SELECT id FROM attendance_sessions
-       WHERE department = $1
-         AND section = $2
-         AND year = $3
-         AND session_date = $4
-         AND period_number = $5`,
-      [department, section, year, session_date, period_number]
+       WHERE subject_id = $1 AND
+         department = $2 AND
+         section = $3 AND
+         year = $4 AND
+         session_date = $5 AND
+         period_number = $6`,
+      [subject_id, department, section, year, session_date, period_number]
     );
 
     if (duplicateCheck.rows.length > 0) {
@@ -668,9 +669,9 @@ router.post('/mark-multiple', verifyToken, async (req, res) => {
     // 1️⃣ Prevent duplicate attendance
     const duplicateCheck = await db.query(
       `SELECT id FROM attendance_sessions
-       WHERE department=$1 AND section=$2 AND year=$3
-         AND session_date=$4 AND period_number=$5`,
-      [department, section, year, session_date, period_number]
+       WHERE subject_id=$1 AND department=$2 AND section=$3 AND year=$4
+         AND session_date=$5 AND period_number=$6`,
+      [subject_id, department, section, year, session_date, period_number]
     );
 
     if (duplicateCheck.rows.length > 0) {

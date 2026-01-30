@@ -11,46 +11,62 @@ router.post('/register', verifyToken, async (req, res) => {
   const db = req.app.locals.db;
 
   try {
-    // Check if student ID already exists
-    const existingStudent = await db.query(
-      'SELECT student_id FROM students WHERE student_id = $1',
+    if (!student_id || !name || !department || !year || !section || !image) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Check duplicate
+    const existing = await db.query(
+      'SELECT 1 FROM students WHERE student_id = $1',
       [student_id]
     );
 
-    if (existingStudent.rows.length > 0) {
-      return res.status(400).json({ error: 'Student ID already exists. Please use a different ID.' });
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Student ID already exists' });
     }
 
-    // Get face encoding from ML service
+    // Call ML service
     const mlResponse = await axios.post(`${ML_SERVICE_URL}/register_face`, {
-      image: image
+      image
     });
 
-    if (!mlResponse.data.success) {
-      return res.status(400).json({ error: mlResponse.data.error });
+    if (!mlResponse.data.success || !mlResponse.data.embedding) {
+      return res.status(400).json({ error: 'Face encoding failed' });
     }
 
-    const faceEncoding = JSON.stringify(mlResponse.data.embedding);
+    // ✅ VERY IMPORTANT FIX
+    const faceEncoding = JSON.stringify(
+      Array.from(mlResponse.data.embedding).map(Number)
+    );
 
-    // Insert student into database
+    // Insert student
     const result = await db.query(
-      `INSERT INTO students (student_id, name, email, department, year, section, face_encoding) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
-       RETURNING id, student_id, name, email, department, registered_at`,
-      [student_id, name, email, department, year, section, faceEncoding]
+      `INSERT INTO students
+       (student_id, name, email, department, year, section, face_encoding)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       RETURNING student_id, name, department, section, year`,
+      [
+        student_id,
+        name,
+        email || null,
+        department,
+        year,
+        section,
+        faceEncoding
+      ]
     );
 
     res.status(201).json({
       message: 'Student registered successfully',
       student: result.rows[0]
     });
+
   } catch (error) {
     console.error('Student registration error:', error);
-    if (error.response?.data?.error) {
-      res.status(400).json({ error: error.response.data.error });
-    } else {
-      res.status(500).json({ error: 'Failed to register student' });
-    }
+    res.status(500).json({
+      error: 'Failed to register student',
+      details: error.message
+    });
   }
 });
 
